@@ -1,8 +1,9 @@
 numpy
 torch
-cv2
+opencv-python
 torchvision
-skimage
-PIL
-sklearn
+scikit-image
+scikit-learn
 matplotlib
+tensorboard
+standard-imghdr # For python 3.13 and above

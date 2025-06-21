@@ -5,9 +5,7 @@ import torchvision.transforms.functional as TF
 import numpy as np
 import cv2
 
-
 from skimage.feature import local_binary_pattern
-from PIL import Image
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 import matplotlib.pyplot as plt
@@ -17,8 +15,17 @@ import os
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 from torch.utils.tensorboard import SummaryWriter
 
+import kagglehub
 
-writer = SummaryWriter('runs/FER2013_Train_v42') # command: 'tensorboard --logdir=runs --bind_all' in python Terminal
+# Download latest version
+try:
+    data_dir = kagglehub.dataset_download("msambare/fer2013")
+except:
+    data_dir = r'C:\Users\USER\PycharmProjects\Brian_Home\FER2013'  # Modify this path to the location of your FER2013 folder
+
+print("Path to dataset files:", data_dir)
+
+writer = SummaryWriter('runs/FER2013_Train_v42') # command: 'tensorboard --logdir=/path/to/logs --bind_all' in python Terminal, it should give you a url.
 
 layout = {
     "Loss/Accuracy": {
@@ -37,66 +44,6 @@ label_map = {0: 'angry', 1: 'disgust', 2: 'fear', 3: 'happy', 4: 'neutral', 5: '
 def labels_to_names(labels):
     return [label_map[label.item()] for label in labels]
 
-
-# class CombinedFeaturesTransform:
-#
-#
-#     def __init__(self, lbp_points=8, lbp_radius=1, orb_max_features=256, num_regions=4):
-#         self.lbp_points = lbp_points
-#         self.lbp_radius = lbp_radius
-#         self.orb_max_features = orb_max_features
-#         self.num_regions = num_regions
-#
-#     def __call__(self, img):
-#         image_np = np.array(img.convert('L'))
-#
-#         # Compute LBP histogram
-#         lbp = local_binary_pattern(image_np, self.lbp_points, self.lbp_radius, method='uniform')
-#         lbp_image = np.interp(lbp, (lbp.min(), lbp.max()), (0, 255)).astype(np.uint8)
-#         lbp_hist, _ = np.histogram(lbp, bins=np.arange(257), density=True)
-#         lbp_hist = lbp_hist.astype('float32')
-#
-#         # Calculate ORB for regions
-#         descriptors_list = []
-#         h, w = image_np.shape
-#         region_size_h = h // int(np.sqrt(self.num_regions))
-#         region_size_w = w // int(np.sqrt(self.num_regions))
-#         orb = cv2.ORB_create(nfeatures=self.orb_max_features // self.num_regions)
-#         keypoints = []
-#
-#         for i in range(0, h, region_size_h):
-#             for j in range(0, w, region_size_w):
-#                 region = image_np[i:i+region_size_h, j:j+region_size_w]
-#                 kps, descriptors = orb.detectAndCompute(region, None)
-#                 keypoints.extend(kps)  # Collect keypoints from all regions
-#                 if descriptors is not None:
-#                     descriptors = descriptors.flatten()
-#                     if len(descriptors) > (self.orb_max_features * 32 // self.num_regions):
-#                         # Crop or pad the descriptors to fix the length
-#                         descriptors = descriptors[:self.orb_max_features * 32 // self.num_regions]
-#                 else:
-#                     descriptors = np.zeros((self.orb_max_features * 32 // self.num_regions,))
-#                 descriptors_list.append(descriptors)
-#
-#         #
-#         image_color = cv2.cvtColor(image_np, cv2.COLOR_GRAY2BGR)
-#         image_with_kps = cv2.drawKeypoints(image_color, keypoints, None,color=(0, 0, 255), flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-#
-#         # Combine all region descriptors
-#         combined_descriptors = np.hstack(descriptors_list)
-#
-#         # Debug: Print shapes to understand the output sizes
-#         #print(f"LBP histogram shape: {lbp_hist.shape}")
-#         #print(f"Combined descriptors shape: {combined_descriptors.shape}")
-#
-#         # Combine LBP histogram and ORB descriptors
-#         combined_features = np.hstack((lbp_hist, combined_descriptors)).astype('float32')
-#
-#         # Debug: Print final feature shape
-#         #print(f"Combined features shape: {combined_features.shape}")
-#
-#         return torch.from_numpy(combined_features), lbp_image, image_with_kps
-
 class CombinedFeaturesTransform:
     def __init__(self, lbp_points=16, lbp_radius=2, orb_max_features=256, lbp_bins=256, max_descriptors=32,
                  descriptor_length=32):
@@ -108,10 +55,14 @@ class CombinedFeaturesTransform:
         self.descriptor_length = descriptor_length
 
     def __call__(self, img):
-        image_np = np.array(img.convert('L'))
+        try:
+            image_np = np.array(img.convert('L'))
+        except:
+            image_np = img
 
         # Compute LBP histogram
-        lbp = local_binary_pattern(image_np, self.lbp_points, self.lbp_radius, method='uniform')
+        frame_gray = cv2.cvtColor(image_np, cv2.COLOR_BGR2GRAY)
+        lbp = local_binary_pattern(frame_gray, self.lbp_points, self.lbp_radius, method='uniform')
         lbp_image = np.interp(lbp, (lbp.min(), lbp.max()), (0, 255)).astype(np.uint8)
         lbp_hist, _ = np.histogram(lbp, bins=np.arange(self.lbp_bins + 1), density=True)
         lbp_hist = lbp_hist.astype('float32')
@@ -145,32 +96,13 @@ class CombinedFeaturesTransform:
         combined_features = np.hstack((lbp_hist, descriptors)).astype('float32')
 
         # Visualize keypoints
-        image_color = cv2.cvtColor(image_np, cv2.COLOR_GRAY2BGR)
+        try:
+            image_color = cv2.cvtColor(image_np, cv2.COLOR_GRAY2BGR)
+        except:
+            image_color = image_np
         image_with_kps = cv2.drawKeypoints(image_color, keypoints, None, color=(0, 255, 0), flags=0)
 
         return torch.from_numpy(combined_features), lbp_image, image_with_kps
-
-class CustomTransform:
-    def __call__(self, image):
-        # Convert PIL image to numpy array
-        image_np = np.array(image)
-
-        # Convert to grayscale
-        gray_image = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
-
-        # Apply LBP features
-        radius = 1  # Radius for LBP
-        n_points = 8 * radius  # Number of points for LBP
-        lbp_image = local_binary_pattern(gray_image, n_points, radius, method="uniform")
-
-        # Scale the LBP image to 0-255 to visualize it as a grayscale image
-        lbp_scaled = np.interp(lbp_image, (lbp_image.min(), lbp_image.max()), (0, 255))
-        lbp_scaled = lbp_scaled.astype(np.uint8)
-
-        # Convert numpy array back to PIL Image for output
-        pil_img = Image.fromarray(lbp_scaled)
-
-        return pil_img
 
 class ConvNet(nn.Module):
     def __init__(self):
@@ -531,33 +463,34 @@ def val_model(model, device, test_loader, epoch, writer):
     return epoch_acc, cm
 
 
-# Hyper-parameters
-input_size = 48*48 # 48x48
-num_classes = 7
-num_epochs = 60
-batch_size = 16 # 32
-learning_rate = 0.001
+if __name__ == '__main__':
 
-# init the CNN model
-if torch.cuda.is_available():
-    print("CUDA is available! Training on GPU.")
-else:
-    print("CUDA is not available. Training on CPU.")
+    # Hyper-parameters
+    input_size = 48*48 # 48x48
+    num_classes = 7
+    num_epochs = 60
+    batch_size = 16 # 32
+    learning_rate = 0.001
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# model = ConvNet(num_classes=num_classes).to(device)
-model = ConvNet().to(device)
+    # init the CNN model
+    if torch.cuda.is_available():
+        print("CUDA is available! Training on GPU.")
+    else:
+        print("CUDA is not available. Training on CPU.")
 
-# Loss Function Optimizer
-criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # model = ConvNet(num_classes=num_classes).to(device)
+    model = ConvNet().to(device)
 
-# Loading Data
-data_dir = r'C:\Users\USER\PycharmProjects\Brian_Home\FER2013'  # Modify this path to the location of your FER2013 folder
-train_loader, test_loader, train_dataset, test_dataset = load_data(data_dir, batch_size)
+    # Loss Function Optimizer
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-train_model(model, device, train_loader, test_loader, criterion, optimizer, writer, num_epochs)
+    # Loading Data
+    train_loader, test_loader, train_dataset, test_dataset = load_data(data_dir, batch_size)
 
-writer.close()
-print("\nFinish")
+    train_model(model, device, train_loader, test_loader, criterion, optimizer, writer, num_epochs)
+
+    writer.close()
+    print("\nFinish")
 
