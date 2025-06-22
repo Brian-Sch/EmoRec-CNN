@@ -94,12 +94,6 @@ models/best_model_state_dict.pth
 
 $ pip install -r requirements.txt
 
-- torch
-- torchvision
-- scikit-image
-- opencv-python
-- matplotlib
-- tensorboard
 
 🔬 References
 --------------
