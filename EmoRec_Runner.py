@@ -5,7 +5,7 @@ from torchvision import transforms
 import cv2
 import numpy as np
 from skimage.feature import local_binary_pattern
-from HOG_VGG_Model import ConvNet, CombinedFeaturesTransform
+from EmoRec_Train import ConvNet, CombinedFeaturesTransform
 
 # Load the pre-trained Haar Cascade for face detection
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
