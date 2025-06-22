@@ -63,9 +63,9 @@ To train:
 $ python EmoRec_Train.py
 
 TensorBoard:
-$ tensorboard --logdir=runs --bind_all
+$ tensorboard --logdir=/path/to/logs --bind_all
 
-TensorBoard events saved at:
+TensorBoard logs saved at:
 runs/FER2013_Train_v42
 
 Best model saved at:
